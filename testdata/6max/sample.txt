@@ -1,0 +1,26 @@
+Poker Hand #SG6001: Tournament #200000001, Spin & Gold $5 Hold'em No Limit - Level1(10/20) - 2026/06/01 13:00:00
+Table '200000001 1' 6-max Seat #1 is the button
+Seat 1: Hero (500 in chips)
+Seat 2: a1b2c3 (500 in chips)
+Seat 3: d4e5f6 (500 in chips)
+Seat 4: g7h8i9 (500 in chips)
+Seat 5: j1k2l3 (500 in chips)
+Seat 6: m4n5o6 (500 in chips)
+a1b2c3: posts small blind 10
+d4e5f6: posts big blind 20
+*** HOLE CARDS ***
+Dealt to Hero [Js Jd]
+g7h8i9: folds
+j1k2l3: folds
+m4n5o6: folds
+Hero: raises 40 to 60
+a1b2c3: folds
+d4e5f6: calls 40
+*** FLOP *** [9s 4h 2d]
+d4e5f6: checks
+Hero: bets 70
+d4e5f6: folds
+Hero collected 150 from pot
+*** SUMMARY ***
+Total pot 150 | Rake 0
+Board [9s 4h 2d]
