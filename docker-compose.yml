@@ -115,6 +115,16 @@ services:
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
 
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    # NEXT_PUBLIC_* are baked at build; defaults (localhost:8000 / :9999) match the browser.
+
 volumes:
   clickhouse_data:
   postgres_data:
