@@ -1,5 +1,15 @@
-"""Thin Python wrapper around the Rust ``hh_parser`` extension."""
+"""Hand-history parsing: Rust ``hh_parser`` wrapper + domain mapping."""
 
-from .wrapper import ParserUnavailable, detect_format, parse
+from .mapping import build_hand, build_hands, build_tournament, deterministic_hand_id
+from .wrapper import ParserUnavailable, detect_format, parse, parse_summary
 
-__all__ = ["parse", "detect_format", "ParserUnavailable"]
+__all__ = [
+    "parse",
+    "parse_summary",
+    "detect_format",
+    "ParserUnavailable",
+    "build_hand",
+    "build_hands",
+    "build_tournament",
+    "deterministic_hand_id",
+]

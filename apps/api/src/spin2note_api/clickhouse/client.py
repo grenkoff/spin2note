@@ -15,19 +15,24 @@ from clickhouse_connect.driver.asyncclient import AsyncClient
 
 from ..config import Settings
 
-# Physical column order per table (must match migrations/clickhouse).
+# Column projection per table (names must match migrations/clickhouse).
 TABLE_COLUMNS: dict[str, list[str]] = {
     "hands": [
-        "hand_id", "user_id", "tournament_format", "effective_stack_bb", "played_at",
-        "multiplier", "small_blind", "big_blind", "board", "pot", "parsed_at",
+        "hand_id", "user_id", "tournament_format", "effective_stack_bb", "source_hand_id",
+        "tournament_id", "level", "button_seat", "played_at", "multiplier", "small_blind",
+        "big_blind", "board", "pot", "rake", "parsed_at",
     ],
     "hand_players": [
-        "hand_id", "user_id", "tournament_format", "effective_stack_bb", "seat",
-        "is_hero", "villain_hash", "position", "starting_stack", "result", "parsed_at",
+        "hand_id", "user_id", "tournament_format", "effective_stack_bb", "seat", "is_hero",
+        "villain_hash", "position", "starting_stack", "hole_cards", "won", "result", "parsed_at",
     ],
     "actions": [
-        "hand_id", "user_id", "tournament_format", "effective_stack_bb", "street",
-        "seat", "action_index", "action_type", "amount", "pot_before",
+        "hand_id", "user_id", "tournament_format", "effective_stack_bb", "street", "seat",
+        "action_index", "action_type", "amount", "pot_before", "to_amount", "all_in",
+    ],
+    "tournaments": [
+        "tournament_id", "user_id", "name", "buy_in", "currency", "players", "prize_pool",
+        "multiplier", "started_at", "hero_place", "parsed_at",
     ],
 }
 
@@ -57,5 +62,7 @@ def make_insert_fn(client: AsyncClient) -> Any:
 def _field(row: Any, name: str) -> Any:
     # Accept both domain models (attribute access) and raw parser dicts.
     value = row.get(name) if isinstance(row, dict) else getattr(row, name, None)
+    if isinstance(value, bool):
+        return int(value)  # UInt8 flags (is_hero, all_in)
     # IntEnum (tournament_format) -> raw int the ClickHouse Enum8 expects.
     return int(value) if hasattr(value, "value") and isinstance(value, int) else value

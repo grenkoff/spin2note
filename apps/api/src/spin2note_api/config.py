@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     batch_max_rows: int = 1000
     batch_max_interval_seconds: float = 1.0
 
+    # Fallback owner id for uploads without an authenticated user (local dev / bulk import).
+    default_user_id: str = "00000000-0000-0000-0000-000000000001"
+
 
 @lru_cache
 def get_settings() -> Settings:

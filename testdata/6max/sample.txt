@@ -1,26 +1,40 @@
-Poker Hand #SG6001: Tournament #200000001, Spin & Gold $5 Hold'em No Limit - Level1(10/20) - 2026/06/01 13:00:00
-Table '200000001 1' 6-max Seat #1 is the button
-Seat 1: Hero (500 in chips)
-Seat 2: a1b2c3 (500 in chips)
-Seat 3: d4e5f6 (500 in chips)
-Seat 4: g7h8i9 (500 in chips)
-Seat 5: j1k2l3 (500 in chips)
-Seat 6: m4n5o6 (500 in chips)
-a1b2c3: posts small blind 10
-d4e5f6: posts big blind 20
+Poker Hand #SG6000000001: Tournament #900000002, Spin&Gold #14 Hold'em No Limit - Level1(10/20) - 2026/01/31 11:26:03
+Table '20001' 6-max Seat #1 is the button
+Seat 1: cccc1111 (300 in chips)
+Seat 2: dddd2222 (300 in chips)
+Seat 3: eeee3333 (300 in chips)
+Seat 4: ffff4444 (300 in chips)
+Seat 5: gggg5555 (300 in chips)
+Seat 6: Hero (300 in chips)
+dddd2222: posts small blind 10
+eeee3333: posts big blind 20
 *** HOLE CARDS ***
-Dealt to Hero [Js Jd]
-g7h8i9: folds
-j1k2l3: folds
-m4n5o6: folds
-Hero: raises 40 to 60
-a1b2c3: folds
-d4e5f6: calls 40
-*** FLOP *** [9s 4h 2d]
-d4e5f6: checks
-Hero: bets 70
-d4e5f6: folds
-Hero collected 150 from pot
+Dealt to cccc1111
+Dealt to dddd2222
+Dealt to eeee3333
+Dealt to ffff4444
+Dealt to gggg5555
+Dealt to Hero [Qc Ad]
+ffff4444: calls 20
+gggg5555: raises 280 to 300 and is all-in
+Hero: calls 300 and is all-in
+cccc1111: folds
+dddd2222: folds
+eeee3333: folds
+ffff4444: folds
+gggg5555: shows [4s 4d]
+Hero: shows [Qc Ad]
+*** FLOP *** [Th 8s Js]
+*** TURN *** [Th 8s Js] [3s]
+*** RIVER *** [Th 8s Js 3s] [Ts]
+*** SHOWDOWN ***
+gggg5555 collected 650 from pot
 *** SUMMARY ***
-Total pot 150 | Rake 0
-Board [9s 4h 2d]
+Total pot 650 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Board [Th 8s Js 3s Ts]
+Seat 1: cccc1111 (button) folded before Flop (didn't bet)
+Seat 2: dddd2222 (small blind) folded before Flop
+Seat 3: eeee3333 (big blind) folded before Flop
+Seat 4: ffff4444 folded before Flop
+Seat 5: gggg5555 showed [4s 4d] and won (650) with a flush Jack high
+Seat 6: Hero showed [Qc Ad] and lost with a pair of Tens
