@@ -32,3 +32,14 @@ def detect_format(raw: str) -> str:
 def parse(raw: str) -> list[dict[str, Any]]:
     """Parse a raw hand-history blob into a list of structured hand dicts."""
     return list(_hh_parser().parse(raw))
+
+
+def parse_summary(raw: str) -> dict[str, Any] | None:
+    """Parse a tournament summary file into a metadata dict (or None if not a summary)."""
+    result: dict[str, Any] | None = _hh_parser().parse_summary(raw)
+    return result
+
+
+def looks_like_summary(raw: str) -> bool:
+    """Cheap content sniff to route a file to the hand vs summary parser."""
+    return "Poker Hand #" not in raw and "Buy-in:" in raw
