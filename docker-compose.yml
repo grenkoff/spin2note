@@ -1,0 +1,121 @@
+# Full production stack, reproducible locally or on any Docker host (cloud-agnostic).
+# Railway runs these same images; nothing here is Railway-specific.
+
+name: spin2note
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      CLICKHOUSE_DB: spin2note
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123"   # HTTP (used by clickhouse-connect)
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: spin2note
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  auth:
+    image: supabase/gotrue:v2.158.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      PORT: "9999"
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@postgres:5432/spin2note?search_path=auth&sslmode=disable
+      GOTRUE_SITE_URL: http://localhost:3000
+      GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-super-secret-jwt-token-change-me}
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_DISABLE_SIGNUP: "false"
+    ports:
+      - "9999:9999"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      clickhouse: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    environment:
+      CLICKHOUSE_URL: http://clickhouse:8123
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/spin2note
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-super-secret-jwt-token-change-me}
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["python", "-m", "spin2note_api.worker"]
+    depends_on:
+      - api
+    environment:
+      CLICKHOUSE_URL: http://clickhouse:8123
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/spin2note
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+
+volumes:
+  clickhouse_data:
+  postgres_data:
+  minio_data:

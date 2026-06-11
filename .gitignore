@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.uv/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Rust
+/target/
+crates/*/target/
+**/*.rs.bk
+Cargo.lock
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Data / artifacts
+*.log
+/data/

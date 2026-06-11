@@ -1,0 +1,59 @@
+[project]
+name = "spin2note-api"
+version = "0.1.0"
+description = "Spin&Gold analytics backend (FastAPI + Rust HH parser)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "python-multipart>=0.0.12",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "clickhouse-connect>=0.8",
+    "aiohttp>=3.10",
+    "redis>=5.2",
+    "minio>=7.2",
+    "sqlalchemy>=2.0",
+    "sqlmodel>=0.0.22",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+    "pyjwt[crypto]>=2.10",
+    "httpx>=0.28",
+    "uuid6>=2024.7.10",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "maturin>=1.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spin2note_api"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+# B008: FastAPI uses `Depends(...)` as a default value by design.
+# ASYNC109: `timeout` here is Redis' server-side BLPOP timeout, not an asyncio cancellation.
+ignore = ["B008", "ASYNC109"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
