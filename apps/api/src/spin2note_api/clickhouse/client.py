@@ -37,6 +37,19 @@ TABLE_COLUMNS: dict[str, list[str]] = {
 }
 
 
+_api_client: AsyncClient | None = None
+
+
+async def get_api_client() -> AsyncClient:
+    """Lazily-created shared read client for the API (FastAPI dependency)."""
+    global _api_client
+    if _api_client is None:
+        from ..config import get_settings
+
+        _api_client = await make_client(get_settings())
+    return _api_client
+
+
 async def make_client(settings: Settings) -> AsyncClient:
     return await clickhouse_connect.get_async_client(
         interface="http",

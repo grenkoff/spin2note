@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # Fallback owner id for uploads without an authenticated user (local dev / bulk import).
     default_user_id: str = "00000000-0000-0000-0000-000000000001"
 
+    # CORS origins allowed to call the API (the Next.js frontend).
+    cors_origins: list[str] = ["http://localhost:3000"]
+
 
 @lru_cache
 def get_settings() -> Settings:

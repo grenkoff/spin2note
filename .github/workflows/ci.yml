@@ -41,8 +41,27 @@ jobs:
       - name: Python tests
         run: uv run pytest
 
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install deps
+        run: npm install
+      - name: Lint
+        run: npm run lint
+      - name: Type-check
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+
   deploy:
-    needs: backend
+    needs: [backend, web]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
