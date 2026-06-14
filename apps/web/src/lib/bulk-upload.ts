@@ -21,7 +21,8 @@ export interface BulkProgress {
   filesSkipped: number;
   chunksUploaded: number;
   chunksStarted: number;
-  bytesUploaded: number;
+  bytesUploaded: number; // original bytes sent so far (drives the progress bar)
+  bytesTotal: number; // sum of selected file sizes, known upfront
 }
 
 function gzipAsync(data: Uint8Array): Promise<Uint8Array> {
@@ -72,18 +73,20 @@ export async function bulkUpload(
     chunksUploaded: 0,
     chunksStarted: 0,
     bytesUploaded: 0,
+    bytesTotal: files.reduce((s, f) => s + f.size, 0),
   };
 
-  // Run an upload task under backpressure (at most CONCURRENCY in flight).
-  const run = (taskFn: () => Promise<number>) => {
+  // Run a text-bundle upload under backpressure (at most CONCURRENCY in flight). `bytes` is the
+  // original (uncompressed) size of the bundle, credited to the bar once the chunk lands.
+  const run = (bytes: number, taskFn: () => Promise<unknown>) => {
     p.chunksStarted += 1;
     onProgress({ ...p });
     const task = (async () => {
       await sem.acquire();
       try {
-        const n = await taskFn();
+        await taskFn();
         p.chunksUploaded += 1;
-        p.bytesUploaded += n;
+        p.bytesUploaded += bytes;
         onProgress({ ...p });
       } finally {
         sem.release();
@@ -92,44 +95,72 @@ export async function bulkUpload(
     inFlight.push(task);
   };
 
-  const ship = async (text: string) =>
-    run(async () => uploadBulk(token, await gzipAsync(encoder.encode(text)), sessionId));
+  const ship = async (text: string, bytes: number) =>
+    run(bytes, async () => uploadBulk(token, await gzipAsync(encoder.encode(text)), sessionId));
+
+  // Stream one archive to the server, crediting the bar from real upload progress (XHR).
+  const shipArchive = (a: File) => {
+    p.chunksStarted += 1;
+    onProgress({ ...p });
+    const task = (async () => {
+      await sem.acquire();
+      try {
+        let last = 0;
+        await uploadArchive(token, a, sessionId, (loaded) => {
+          p.bytesUploaded += loaded - last;
+          last = loaded;
+          onProgress({ ...p });
+        });
+        p.bytesUploaded += a.size - last; // settle any rounding from the last progress event
+        p.filesRead += 1;
+        p.chunksUploaded += 1;
+        onProgress({ ...p });
+      } finally {
+        sem.release();
+      }
+    })();
+    inFlight.push(task);
+  };
 
   let hh: string[] = [];
   let hhSize = 0;
+  let hhBytes = 0;
   let sm: string[] = [];
   let smSize = 0;
+  let smBytes = 0;
 
   // Read files with bounded concurrency (disk I/O parallelism) while bundling sequentially.
   const READ_CONCURRENCY = 16;
   for (let i = 0; i < files.length; i += READ_CONCURRENCY) {
     const batch = files.slice(i, i + READ_CONCURRENCY);
     // Archives go straight to the server (extracted there); the rest are read as text.
-    const archives = batch.filter((f) => isArchive(f.name));
-    for (const a of archives) {
-      p.filesRead += 1;
-      run(() => uploadArchive(token, a, sessionId));
-    }
+    for (const a of batch.filter((f) => isArchive(f.name))) shipArchive(a);
     const textFiles = batch.filter((f) => !isArchive(f.name));
     const texts = await Promise.all(textFiles.map((f) => f.text()));
-    for (const text of texts) {
+    for (let j = 0; j < textFiles.length; j++) {
+      const text = texts[j];
+      const fileBytes = textFiles[j].size;
       p.filesRead += 1;
       const kind = classify(text);
       if (kind === "hh") {
         hh.push(text);
         hhSize += text.length;
+        hhBytes += fileBytes;
         if (hhSize >= CHUNK_BYTES) {
-          await ship(hh.join("\n"));
+          await ship(hh.join("\n"), hhBytes);
           hh = [];
           hhSize = 0;
+          hhBytes = 0;
         }
       } else if (kind === "summary") {
         sm.push(text);
         smSize += text.length;
+        smBytes += fileBytes;
         if (smSize >= CHUNK_BYTES) {
-          await ship(sm.join("\n"));
+          await ship(sm.join("\n"), smBytes);
           sm = [];
           smSize = 0;
+          smBytes = 0;
         }
       } else {
         p.filesSkipped += 1;
@@ -138,9 +169,10 @@ export async function bulkUpload(
     onProgress({ ...p });
   }
 
-  if (hh.length) await ship(hh.join("\n"));
-  if (sm.length) await ship(sm.join("\n"));
+  if (hh.length) await ship(hh.join("\n"), hhBytes);
+  if (sm.length) await ship(sm.join("\n"), smBytes);
   await Promise.all(inFlight);
+  p.bytesUploaded = p.bytesTotal; // settle the bar to 100% (skipped files never shipped bytes)
   onProgress({ ...p });
   return { sessionId, progress: p };
 }

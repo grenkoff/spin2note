@@ -56,24 +56,36 @@ export async function uploadBulk(
   return gzipped.byteLength;
 }
 
-/** Upload one archive (zip/rar/7z/…) for server-side extraction; returns its byte count. */
-export async function uploadArchive(
+/**
+ * Upload one archive (zip/rar/7z/…) for server-side extraction; returns its byte count.
+ * Uses XHR so the caller can track real upload progress via `onUploadProgress(loadedBytes)` —
+ * fetch() does not expose request-body upload progress.
+ */
+export function uploadArchive(
   token: string,
   file: File,
   sessionId: string,
+  onUploadProgress?: (loaded: number) => void,
 ): Promise<number> {
-  const res = await fetch(`${API_URL}/ingest/archive`, {
-    method: "POST",
-    body: file,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/octet-stream",
-      "X-Upload-Session": sessionId,
-      "X-Filename": encodeURIComponent(file.name),
-    },
+  return new Promise<number>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}/ingest/archive`);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("X-Upload-Session", sessionId);
+    xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
+    if (onUploadProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onUploadProgress(e.loaded);
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve(file.size);
+      else reject(new Error(`API ${xhr.status}: ${xhr.responseText}`));
+    };
+    xhr.onerror = () => reject(new Error("Network error during archive upload"));
+    xhr.send(file);
   });
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-  return file.size;
 }
 
 /** Aggregated added/skipped report for one upload session. */
