@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     app_name: str = "spin2note-api"
     environment: str = "development"
+    # Logging: text in development, JSON in any other environment (prod-friendly aggregation).
+    log_level: str = "INFO"
 
     # ClickHouse (analytics store)
     clickhouse_url: str = "http://localhost:8123"  # HTTP, used for reads (clickhouse-connect)

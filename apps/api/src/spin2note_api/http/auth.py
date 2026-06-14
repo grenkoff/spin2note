@@ -14,6 +14,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ..config import Settings, get_settings
+from ..logging_config import bind_log_context
 
 _bearer = HTTPBearer(auto_error=True)
 _optional_bearer = HTTPBearer(auto_error=False)
@@ -51,6 +52,7 @@ async def require_user(
             )
     except jwt.PyJWTError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token") from exc
+    bind_log_context(user_id=str(claims.get("sub", "")))
     return claims
 
 
@@ -63,9 +65,11 @@ async def current_user_id(
     Lets bulk imports / local dev upload without auth while honouring a real user when signed in.
     """
     if credentials is None:
+        bind_log_context(user_id=settings.default_user_id)
         return settings.default_user_id
     try:
         claims = await require_user(credentials, settings)
     except HTTPException:
+        bind_log_context(user_id=settings.default_user_id)
         return settings.default_user_id
     return str(claims.get("sub", settings.default_user_id))
