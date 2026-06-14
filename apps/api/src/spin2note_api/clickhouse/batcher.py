@@ -13,10 +13,13 @@ test-agnostic (the production wiring passes a clickhouse-connect insert; tests p
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 InsertFn = Callable[[str, Sequence[Any]], Awaitable[None]]
+
+logger = logging.getLogger("spin2note.clickhouse.batcher")
 
 
 class ClickHouseBatcher:
@@ -99,4 +102,7 @@ class ClickHouseBatcher:
     async def _periodic_flush(self) -> None:
         while self._running:
             await asyncio.sleep(self._max_interval)
-            await self.flush_all()
+            try:
+                await self.flush_all()
+            except Exception:  # noqa: BLE001 - never let the flusher task die silently
+                logger.exception("periodic flush failed; will retry on next tick")
