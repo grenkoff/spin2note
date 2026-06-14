@@ -15,6 +15,7 @@ dependencies = [
     "asynch>=0.2.5",
     "redis>=5.2",
     "minio>=7.2",
+    "libarchive-c>=5.1",
     "sqlalchemy>=2.0",
     "sqlmodel>=0.0.22",
     "alembic>=1.14",

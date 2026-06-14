@@ -25,6 +25,9 @@ RUN cd apps/api && uv sync
 
 FROM python:3.12-slim-bookworm AS runtime
 WORKDIR /app/apps/api
+# libarchive13: archive extraction (zip/rar/7z/tar/...) via libarchive-c.
+RUN apt-get update && apt-get install -y --no-install-recommends libarchive13 \
+    && rm -rf /var/lib/apt/lists/*
 ENV PATH="/app/apps/api/.venv/bin:${PATH}"
 COPY --from=builder /app/apps/api/.venv /app/apps/api/.venv
 COPY --from=builder /app/apps/api/src /app/apps/api/src

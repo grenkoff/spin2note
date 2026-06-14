@@ -1,6 +1,13 @@
 import { gzip } from "fflate";
 
-import { uploadBulk } from "./api";
+import { uploadArchive, uploadBulk } from "./api";
+
+// Archives are extracted server-side (one engine for zip/rar/7z/tar/…); plain .txt files are
+// bundled client-side.
+const ARCHIVE_RE = /\.(zip|rar|7z|tar|tar\.gz|tgz|gz|bz2|xz)$/i;
+export function isArchive(name: string): boolean {
+  return ARCHIVE_RE.test(name);
+}
 
 // The browser concatenates many small files into ~16 MB chunks and gzips them, so a base of
 // hundreds of thousands of files becomes a few dozen requests. The backend parsers split by
@@ -67,14 +74,14 @@ export async function bulkUpload(
     bytesUploaded: 0,
   };
 
-  const ship = async (text: string) => {
+  // Run an upload task under backpressure (at most CONCURRENCY in flight).
+  const run = (taskFn: () => Promise<number>) => {
     p.chunksStarted += 1;
     onProgress({ ...p });
-    await sem.acquire(); // backpressure: at most CONCURRENCY chunks in flight
     const task = (async () => {
+      await sem.acquire();
       try {
-        const gz = await gzipAsync(encoder.encode(text));
-        const n = await uploadBulk(token, gz, sessionId);
+        const n = await taskFn();
         p.chunksUploaded += 1;
         p.bytesUploaded += n;
         onProgress({ ...p });
@@ -85,6 +92,9 @@ export async function bulkUpload(
     inFlight.push(task);
   };
 
+  const ship = async (text: string) =>
+    run(async () => uploadBulk(token, await gzipAsync(encoder.encode(text)), sessionId));
+
   let hh: string[] = [];
   let hhSize = 0;
   let sm: string[] = [];
@@ -93,7 +103,15 @@ export async function bulkUpload(
   // Read files with bounded concurrency (disk I/O parallelism) while bundling sequentially.
   const READ_CONCURRENCY = 16;
   for (let i = 0; i < files.length; i += READ_CONCURRENCY) {
-    const texts = await Promise.all(files.slice(i, i + READ_CONCURRENCY).map((f) => f.text()));
+    const batch = files.slice(i, i + READ_CONCURRENCY);
+    // Archives go straight to the server (extracted there); the rest are read as text.
+    const archives = batch.filter((f) => isArchive(f.name));
+    for (const a of archives) {
+      p.filesRead += 1;
+      run(() => uploadArchive(token, a, sessionId));
+    }
+    const textFiles = batch.filter((f) => !isArchive(f.name));
+    const texts = await Promise.all(textFiles.map((f) => f.text()));
     for (const text of texts) {
       p.filesRead += 1;
       const kind = classify(text);

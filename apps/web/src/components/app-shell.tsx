@@ -3,16 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
-import { LogOut, LayoutDashboard, Upload } from "lucide-react";
+import { LogOut, LayoutDashboard } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/upload", label: "Upload", icon: Upload },
-];
+const NAV = [{ href: "/", label: "Dashboard", icon: LayoutDashboard }];
 
 /** Auth-gated layout: redirects to /login when there is no session. */
 export function AppShell({ children }: { children: React.ReactNode }) {

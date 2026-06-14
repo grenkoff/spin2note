@@ -56,6 +56,26 @@ export async function uploadBulk(
   return gzipped.byteLength;
 }
 
+/** Upload one archive (zip/rar/7z/…) for server-side extraction; returns its byte count. */
+export async function uploadArchive(
+  token: string,
+  file: File,
+  sessionId: string,
+): Promise<number> {
+  const res = await fetch(`${API_URL}/ingest/archive`, {
+    method: "POST",
+    body: file,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+      "X-Upload-Session": sessionId,
+      "X-Filename": encodeURIComponent(file.name),
+    },
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  return file.size;
+}
+
 /** Aggregated added/skipped report for one upload session. */
 export function getImportSummary(token: string, sessionId: string): Promise<ImportSummary> {
   return apiFetch<ImportSummary>(`/imports/${sessionId}`, token);
