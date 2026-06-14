@@ -45,6 +45,32 @@ fn leading_u16(s: &str) -> u16 {
         .unwrap_or(0)
 }
 
+/// Split a blob of concatenated summary files into individual blocks (each starts with a
+/// line `Tournament #...`). Enables bulk upload of many summaries in one request.
+pub fn split_summaries(raw: &str) -> Vec<&str> {
+    let mut blocks = Vec::new();
+    let mut start: Option<usize> = None;
+    let mut idx = 0;
+    for line in raw.split_inclusive('\n') {
+        if line.starts_with("Tournament #") {
+            if let Some(s) = start {
+                blocks.push(raw[s..idx].trim());
+            }
+            start = Some(idx);
+        }
+        idx += line.len();
+    }
+    if let Some(s) = start {
+        blocks.push(raw[s..].trim());
+    }
+    blocks.into_iter().filter(|b| !b.is_empty()).collect()
+}
+
+/// Parse a blob of one or more concatenated summary files.
+pub fn parse_summaries(raw: &str) -> Vec<Summary> {
+    split_summaries(raw).into_iter().filter_map(parse_summary).collect()
+}
+
 pub fn parse_summary(raw: &str) -> Option<Summary> {
     let mut tournament_id = String::new();
     let mut name = String::new();
@@ -159,5 +185,14 @@ You finished in 3rd place.";
         assert_eq!(s.finishes.len(), 1);
         assert_eq!(s.finishes[0].name, "Hero");
         assert_eq!(s.finishes[0].prize, 0.0);
+    }
+
+    #[test]
+    fn parses_concatenated_summaries() {
+        let blob = format!("{SUMMARY}\n{}", SUMMARY.replace("256046646", "256046647"));
+        let all = parse_summaries(&blob);
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].tournament_id, "256046646");
+        assert_eq!(all[1].tournament_id, "256046647");
     }
 }

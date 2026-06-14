@@ -73,6 +73,8 @@ services:
         condition: service_healthy
     environment:
       GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_EXTERNAL_URL: http://localhost:9999
+      API_EXTERNAL_URL: http://localhost:9999
       PORT: "9999"
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@postgres:5432/spin2note?search_path=auth&sslmode=disable
@@ -81,6 +83,9 @@ services:
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_JWT_EXP: "3600"
       GOTRUE_DISABLE_SIGNUP: "false"
+      # Local dev: no mail server, so auto-confirm sign-ups (do NOT use in production).
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
     ports:
       - "9999:9999"
 

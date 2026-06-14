@@ -6,12 +6,41 @@ parameters. They power the presentation-only frontend — no business logic leak
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 from uuid import UUID
 
 from clickhouse_connect.driver.asyncclient import AsyncClient
 
 _FORMAT_FILTER = " AND tournament_format = {fmt:String}"
+
+
+async def existing_hand_ids(
+    client: AsyncClient, user_id: UUID, ids: list[UUID]
+) -> set[UUID]:
+    """Return which of ``ids`` already exist for this user (for input deduplication)."""
+    if not ids:
+        return set()
+    res = await client.query(
+        "SELECT DISTINCT hand_id FROM hands "
+        "WHERE user_id = {u:UUID} AND hand_id IN {ids:Array(UUID)}",
+        parameters={"u": str(user_id), "ids": [str(i) for i in ids]},
+    )
+    return {row[0] if isinstance(row[0], UUID) else UUID(str(row[0])) for row in res.result_rows}
+
+
+async def existing_tournament_ids(
+    client: AsyncClient, user_id: UUID, ids: Iterable[str]
+) -> set[str]:
+    ids = list(ids)
+    if not ids:
+        return set()
+    res = await client.query(
+        "SELECT DISTINCT tournament_id FROM tournaments "
+        "WHERE user_id = {u:UUID} AND tournament_id IN {ids:Array(String)}",
+        parameters={"u": str(user_id), "ids": ids},
+    )
+    return {str(row[0]) for row in res.result_rows}
 
 
 async def overview(client: AsyncClient, user_id: UUID, fmt: str | None) -> dict[str, Any]:

@@ -40,6 +40,11 @@ def parse_summary(raw: str) -> dict[str, Any] | None:
     return result
 
 
+def parse_summaries(raw: str) -> list[dict[str, Any]]:
+    """Parse a blob of one or more concatenated summary files."""
+    return list(_hh_parser().parse_summaries(raw))
+
+
 def looks_like_summary(raw: str) -> bool:
     """Cheap content sniff to route a file to the hand vs summary parser."""
     return "Poker Hand #" not in raw and "Buy-in:" in raw

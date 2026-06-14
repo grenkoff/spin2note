@@ -49,6 +49,16 @@ fn parse_summary<'py>(py: Python<'py>, raw: &str) -> PyResult<Option<Bound<'py, 
     })
 }
 
+/// Parse a blob of one or more concatenated summary files into a list of metadata dicts.
+#[pyfunction]
+fn parse_summaries<'py>(py: Python<'py>, raw: &str) -> PyResult<Bound<'py, PyList>> {
+    let list = PyList::empty_bound(py);
+    for s in summary::parse_summaries(raw) {
+        list.append(summary_to_py(py, &s)?)?;
+    }
+    Ok(list)
+}
+
 fn hand_to_py<'py>(py: Python<'py>, h: &Hand) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new_bound(py);
     d.set_item("source_hand_id", &h.source_hand_id)?;
@@ -135,5 +145,6 @@ fn hh_parser(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(detect_format, m)?)?;
     m.add_function(wrap_pyfunction!(parse, m)?)?;
     m.add_function(wrap_pyfunction!(parse_summary, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_summaries, m)?)?;
     Ok(())
 }

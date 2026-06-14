@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     minio_secret_key: str = "minioadmin"
     minio_secure: bool = False
     minio_bucket_raw: str = "raw-hh"
+    # Raw bundles are a transient staging buffer: the worker deletes each object after a
+    # successful parse, and this lifecycle TTL is the safety net for objects that never parsed.
+    raw_retention_days: int = 1
 
     # Supabase Auth (self-hosted GoTrue) — JWT validation
     supabase_jwks_url: str = "http://localhost:9999/.well-known/jwks.json"
