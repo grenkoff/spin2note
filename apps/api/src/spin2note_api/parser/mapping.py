@@ -96,6 +96,55 @@ def build_hands(parsed_list: list[dict[str, Any]], user_id: UUID) -> list[Hand]:
     return [build_hand(p, user_id) for p in parsed_list]
 
 
+# --- Fast path: build column-ordered tuples directly (no Pydantic) for native inserts. ---
+# Tuple order MUST match clickhouse.client.TABLE_COLUMNS for each table.
+
+_EPOCH = datetime(1970, 1, 1)
+
+
+def build_chunk_rows(
+    hands: list[dict[str, Any]], user_id: UUID, parsed_at: datetime
+) -> dict[str, list[tuple[Any, ...]]]:
+    """Project parsed hand dicts into column-ordered row tuples for hands/hand_players/actions."""
+    hand_rows: list[tuple[Any, ...]] = []
+    player_rows: list[tuple[Any, ...]] = []
+    action_rows: list[tuple[Any, ...]] = []
+    for h in hands:
+        hid = UUID(h["hand_id"])  # deterministic id computed in Rust
+        fmt = h["format"]  # Enum8 label ("3max"/"6max")
+        eff = int(h["effective_stack_bb"])
+        played = _dt(h["played_at"]) or _EPOCH
+        hand_rows.append((
+            hid, user_id, fmt, eff, h["source_hand_id"], h["tournament_id"], h["level"],
+            h["button_seat"], played, 0.0, h["small_blind"], h["big_blind"], h["board"],
+            h["pot"], h["rake"], parsed_at,
+        ))
+        for p in h["players"]:
+            player_rows.append((
+                hid, user_id, fmt, eff, p["seat"], int(p["is_hero"]), p["villain_hash"],
+                p["position"], p["starting_stack"], p["hole_cards"], p["won"], p["result"],
+                parsed_at,
+            ))
+        for a in h["actions"]:
+            action_rows.append((
+                hid, user_id, fmt, eff, a["street"], a["seat"], a["action_index"],
+                a["action_type"], a["amount"], 0.0, a["to_amount"], int(a["all_in"]),
+            ))
+    return {"hands": hand_rows, "hand_players": player_rows, "actions": action_rows}
+
+
+def build_tournament_rows(
+    summaries: list[dict[str, Any]], user_id: UUID, parsed_at: datetime
+) -> list[tuple[Any, ...]]:
+    return [
+        (
+            s["tournament_id"], user_id, s["name"], s["buy_in"], s["currency"], s["players"],
+            s["prize_pool"], s["multiplier"], _dt(s["started_at"]), s["hero_place"], parsed_at,
+        )
+        for s in summaries
+    ]
+
+
 def build_tournament(summary: dict[str, Any], user_id: UUID) -> Tournament:
     return Tournament(
         tournament_id=summary["tournament_id"],

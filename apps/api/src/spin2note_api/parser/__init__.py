@@ -1,6 +1,13 @@
 """Hand-history parsing: Rust ``hh_parser`` wrapper + domain mapping."""
 
-from .mapping import build_hand, build_hands, build_tournament, deterministic_hand_id
+from .mapping import (
+    build_chunk_rows,
+    build_hand,
+    build_hands,
+    build_tournament,
+    build_tournament_rows,
+    deterministic_hand_id,
+)
 from .wrapper import ParserUnavailable, detect_format, parse, parse_summaries, parse_summary
 
 __all__ = [
@@ -12,5 +19,7 @@ __all__ = [
     "build_hand",
     "build_hands",
     "build_tournament",
+    "build_chunk_rows",
+    "build_tournament_rows",
     "deterministic_hand_id",
 ]

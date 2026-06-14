@@ -61,6 +61,7 @@ fn parse_summaries<'py>(py: Python<'py>, raw: &str) -> PyResult<Bound<'py, PyLis
 
 fn hand_to_py<'py>(py: Python<'py>, h: &Hand) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new_bound(py);
+    d.set_item("hand_id", &h.hand_id)?;
     d.set_item("source_hand_id", &h.source_hand_id)?;
     d.set_item("tournament_id", &h.tournament_id)?;
     d.set_item("format", h.format)?;

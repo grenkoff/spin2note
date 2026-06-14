@@ -28,6 +28,7 @@ pub struct Player {
 
 #[derive(Debug, Clone)]
 pub struct Hand {
+    pub hand_id: String, // deterministic UUIDv5(namespace, "tournament_id:source_hand_id")
     pub source_hand_id: String,
     pub tournament_id: String,
     pub format: &'static str, // "3max" | "6max"
@@ -43,6 +44,19 @@ pub struct Hand {
     pub effective_stack_bb: u16, // BB * 10, hero-centric: min(hero, max opponent)
     pub players: Vec<Player>,
     pub actions: Vec<Action>,
+}
+
+/// Namespace for deterministic hand ids — must match Python's `_HAND_NS`
+/// (6f9b2a1e-0c3d-5e4f-8a7b-1d2c3e4f5a6b) so Rust and Python agree on `hand_id`.
+const HAND_NS: uuid::Uuid = uuid::Uuid::from_bytes([
+    0x6f, 0x9b, 0x2a, 0x1e, 0x0c, 0x3d, 0x5e, 0x4f, 0x8a, 0x7b, 0x1d, 0x2c, 0x3e, 0x4f, 0x5a, 0x6b,
+]);
+
+/// Deterministic hand id: UUIDv5 of "tournament_id:source_hand_id". Re-parsing the same hand
+/// yields the same id, which drives idempotent dedup.
+pub fn deterministic_hand_id(tournament_id: &str, source_hand_id: &str) -> String {
+    let name = format!("{tournament_id}:{source_hand_id}");
+    uuid::Uuid::new_v5(&HAND_NS, name.as_bytes()).to_string()
 }
 
 /// Stable, dependency-free 64-bit hash (FNV-1a) for anonymizing opponent ids.

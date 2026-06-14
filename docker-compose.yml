@@ -12,7 +12,8 @@ services:
       CLICKHOUSE_PASSWORD: ""
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     ports:
-      - "8123:8123"   # HTTP (used by clickhouse-connect)
+      - "8123:8123"   # HTTP (clickhouse-connect, reads)
+      - "9009:9000"   # native TCP (asynch, fast inserts); host 9000 is taken by MinIO
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     volumes:
@@ -116,9 +117,14 @@ services:
       - api
     environment:
       CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_NATIVE_PORT: "9000"
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/spin2note
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
+    # Workers consume one Redis queue with atomic BLPOP, so they scale horizontally.
+    # Default 3 replicas; override with `docker compose up --scale worker=N`.
+    deploy:
+      replicas: 3
 
   web:
     build:

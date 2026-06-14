@@ -71,6 +71,24 @@ class ClickHouseBatcher:
         for row in rows:
             await self.submit(table, row)
 
+    async def submit_block(self, table: str, rows: Sequence[Any]) -> None:
+        """Append many rows at once (one lock), flushing full ``max_rows`` blocks.
+
+        Far cheaper than per-row ``submit`` for bulk ingestion — the hot path adds a whole
+        chunk's rows in a single critical section.
+        """
+        if not rows:
+            return
+        async with self._lock:
+            buf = self._buffers.setdefault(table, [])
+            buf.extend(rows)
+            ready: list[list[Any]] = []
+            while len(buf) >= self._max_rows:
+                ready.append(buf[: self._max_rows])
+                del buf[: self._max_rows]
+        for block in ready:
+            await self._insert_fn(table, block)
+
     async def flush_all(self) -> None:
         async with self._lock:
             pending = {t: rows for t, rows in self._buffers.items() if rows}
