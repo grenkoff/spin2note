@@ -7,6 +7,7 @@ protocol, which is markedly faster for large column blocks. Rows are tuples in
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
@@ -31,11 +32,18 @@ async def make_native_conn(settings: Settings) -> Any:
 def make_native_insert_fn(
     conn: Any, columns: dict[str, list[str]]
 ) -> Callable[[str, Sequence[Any]], Awaitable[None]]:
-    """Build an ``insert_fn(table, rows)`` for ClickHouseBatcher backed by the native conn."""
+    """Build an ``insert_fn(table, rows)`` for ClickHouseBatcher backed by the native conn.
+
+    A single asynch connection cannot run concurrent queries (it raises "some records have not
+    been fetched"); the batcher's periodic flush can race a ``submit_block`` insert, so we
+    serialize all inserts on this connection with a lock.
+    """
+    lock = asyncio.Lock()
 
     async def insert_fn(table: str, rows: Sequence[Any]) -> None:
         cols = ", ".join(columns[table])
-        async with conn.cursor() as cur:
-            await cur.executemany(f"INSERT INTO {table} ({cols}) VALUES", list(rows))
+        async with lock:
+            async with conn.cursor() as cur:
+                await cur.executemany(f"INSERT INTO {table} ({cols}) VALUES", list(rows))
 
     return insert_fn
