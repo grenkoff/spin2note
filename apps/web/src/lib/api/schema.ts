@@ -71,6 +71,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ingest/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Archive
+         * @description Accept a single archive (zip/rar/7z/tar/gz/…) and extract its .txt members server-side.
+         *
+         *     The raw archive is staged as-is (already compressed); the worker uses libarchive to pull out
+         *     the hand-history/summary files and feeds them through the normal parse + dedup pipeline.
+         */
+        post: operations["upload_archive_ingest_archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stats/overview": {
         parameters: {
             query?: never;
@@ -298,6 +321,38 @@ export interface operations {
             query?: never;
             header?: {
                 "x-upload-session"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_archive_ingest_archive_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-upload-session"?: string | null;
+                "x-filename"?: string | null;
             };
             path?: never;
             cookie?: never;

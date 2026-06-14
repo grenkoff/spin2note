@@ -25,6 +25,7 @@ from .clickhouse.native import make_native_conn, make_native_insert_fn
 from .clickhouse.queries import existing_hand_ids, existing_tournament_ids, user_has_rows
 from .config import get_settings
 from .db.imports import ImportCounts, finish_import
+from .ingest.archives import extract_text_members
 from .ingest.storage import RawStorage
 from .logging_config import bind_log_context, configure_logging, reset_log_context
 from .parser import (
@@ -87,6 +88,55 @@ async def handle_raw(
     )
 
 
+async def _ingest_chunked(
+    parts: list[str], user_id: UUID, batcher: ClickHouseBatcher, client: AsyncClient
+) -> ImportCounts:
+    """Parse same-blob parts in ~32 MB chunks (bounds memory for huge archives)."""
+    out = ImportCounts()
+    buf: list[str] = []
+    size = 0
+
+    async def flush() -> None:
+        nonlocal buf, size
+        if not buf:
+            return
+        c = await handle_raw("\n".join(buf), user_id, batcher, client)
+        out.hands_added += c.hands_added
+        out.hands_skipped += c.hands_skipped
+        out.tournaments_added += c.tournaments_added
+        out.tournaments_skipped += c.tournaments_skipped
+        buf, size = [], 0
+
+    for part in parts:
+        buf.append(part)
+        size += len(part)
+        if size >= 32 * 1024 * 1024:
+            await flush()
+    await flush()
+    return out
+
+
+async def handle_archive(
+    data: bytes, user_id: UUID, batcher: ClickHouseBatcher, client: AsyncClient
+) -> ImportCounts:
+    """Extract an archive's .txt members, split into hand-history vs summary, and ingest both."""
+    hh_parts: list[str] = []
+    summary_parts: list[str] = []
+    for _name, text in extract_text_members(data):
+        if "Poker Hand #" in text:
+            hh_parts.append(text)
+        elif "Buy-in:" in text or text.startswith("Tournament #"):
+            summary_parts.append(text)
+    counts = await _ingest_chunked(hh_parts, user_id, batcher, client)
+    sums = await _ingest_chunked(summary_parts, user_id, batcher, client)
+    counts.kind = "archive"
+    counts.tournaments_added += sums.tournaments_added
+    counts.tournaments_skipped += sums.tournaments_skipped
+    counts.hands_added += sums.hands_added
+    counts.hands_skipped += sums.hands_skipped
+    return counts
+
+
 async def _handle(
     job: dict[str, Any], storage: RawStorage, batcher: ClickHouseBatcher, client: AsyncClient
 ) -> None:
@@ -97,8 +147,11 @@ async def _handle(
     reset_log_context()
     bind_log_context(user_id=str(user_id), object_key=key, import_id=str(import_id or ""))
     try:
-        raw = _decode_object(key, storage.get(key))
-        counts = await handle_raw(raw, user_id, batcher, client)
+        data = storage.get(key)
+        if job.get("kind") == "archive":
+            counts = await handle_archive(data, user_id, batcher, client)
+        else:
+            counts = await handle_raw(_decode_object(key, data), user_id, batcher, client)
         await batcher.flush_all()  # durable in ClickHouse before dropping raw / reporting
     except ParserUnavailable:
         logger.error("hh_parser not built; leaving %s for retry", key)

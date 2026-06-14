@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { ResultByStack } from "@/components/charts/result-by-stack";
 import { AppShell } from "@/components/app-shell";
+import { Uploader } from "@/components/uploader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +42,7 @@ function Dashboard() {
   const [hands, setHands] = React.useState<RecentHand[]>([]);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
+  const load = React.useCallback(() => {
     if (!token) return;
     setError(null);
     Promise.all([getOverview(token, format), getRecentHands(token, 25)])
@@ -51,6 +52,8 @@ function Dashboard() {
       })
       .catch((e) => setError(String(e)));
   }, [token, format]);
+
+  React.useEffect(load, [load]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,6 +74,8 @@ function Dashboard() {
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <Uploader onComplete={load} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat title="Hands" value={(overview?.total_hands ?? 0).toLocaleString("en-US")} />

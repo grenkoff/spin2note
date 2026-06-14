@@ -40,7 +40,7 @@ def _session_id(header: str | None) -> UUID:
 
 
 async def _register_and_enqueue(
-    settings: Settings, key: str, user_id: str, session_id: UUID
+    settings: Settings, key: str, user_id: str, session_id: UUID, kind: str = "file"
 ) -> UUID:
     import_id = new_id()
     await create_import(
@@ -49,11 +49,12 @@ async def _register_and_enqueue(
     # Imported lazily so the module has no hard Redis dependency at import time.
     from ..cache import RedisQueue
 
+    job = {"object_key": key, "user_id": user_id, "import_id": str(import_id)}
+    if kind != "file":
+        job["kind"] = kind
     queue = RedisQueue(settings.redis_url)
     try:
-        await queue.enqueue(
-            {"object_key": key, "user_id": user_id, "import_id": str(import_id)}
-        )
+        await queue.enqueue(job)
     finally:
         await queue.close()
     return import_id
@@ -110,6 +111,33 @@ async def upload_bulk(
     session_id = _session_id(x_upload_session)
     _stage(settings, key, body)
     import_id = await _register_and_enqueue(settings, key, user_id, session_id)
+    return UploadResult(
+        object_key=key, bytes=len(body), queued=True,
+        import_id=str(import_id), session_id=str(session_id),
+    )
+
+
+@router.post("/archive", response_model=UploadResult)
+async def upload_archive(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    user_id: str = Depends(current_user_id),
+    x_upload_session: str | None = Header(default=None),
+    x_filename: str | None = Header(default=None),
+) -> UploadResult:
+    """Accept a single archive (zip/rar/7z/tar/gz/…) and extract its .txt members server-side.
+
+    The raw archive is staged as-is (already compressed); the worker uses libarchive to pull out
+    the hand-history/summary files and feeds them through the normal parse + dedup pipeline.
+    """
+    body = await request.body()
+    stamp = datetime.now(UTC).strftime("%Y/%m/%d")
+    name = (x_filename or "upload.zip").rsplit("/", 1)[-1]
+    key = f"{user_id}/archive/{stamp}/{new_id()}-{name}"
+
+    session_id = _session_id(x_upload_session)
+    _stage(settings, key, body)
+    import_id = await _register_and_enqueue(settings, key, user_id, session_id, kind="archive")
     return UploadResult(
         object_key=key, bytes=len(body), queued=True,
         import_id=str(import_id), session_id=str(session_id),
