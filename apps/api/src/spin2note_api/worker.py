@@ -26,6 +26,7 @@ from .clickhouse.queries import existing_hand_ids, existing_tournament_ids, user
 from .config import get_settings
 from .db.imports import ImportCounts, finish_import
 from .ingest.storage import RawStorage
+from .logging_config import bind_log_context, configure_logging, reset_log_context
 from .parser import (
     ParserUnavailable,
     build_chunk_rows,
@@ -93,6 +94,8 @@ async def _handle(
     user_id = UUID(job.get("user_id") or settings.default_user_id)
     key = job["object_key"]
     import_id = UUID(job["import_id"]) if job.get("import_id") else None
+    reset_log_context()
+    bind_log_context(user_id=str(user_id), object_key=key, import_id=str(import_id or ""))
     try:
         raw = _decode_object(key, storage.get(key))
         counts = await handle_raw(raw, user_id, batcher, client)
@@ -138,7 +141,7 @@ async def run() -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    configure_logging(get_settings())
     asyncio.run(run())
 
 
