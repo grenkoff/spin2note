@@ -1,52 +1,111 @@
 """Parse-pipeline worker.
 
-Loop: pop a job from Redis -> stream the raw file from MinIO -> parse (hand history or
-tournament summary) with the Rust ``hh_parser`` -> map to domain models -> submit to the
-ClickHouse batcher (blocks >= 1000 rows, never single-row). Runs as a separate process from
-the API so bulk imports don't compete with request handling.
+Loop: pop a job from Redis -> stream the raw file from MinIO -> parse with the Rust
+``hh_parser`` -> **deduplicate on input** (skip hands/tournaments already stored for the user,
+counting how many were skipped) -> submit only the new rows to the ClickHouse batcher -> record
+the per-object import report. Runs as a separate process so bulk imports don't compete with the
+API.
 """
 
 from __future__ import annotations
 
 import asyncio
+import gzip
 import logging
 from typing import Any
 from uuid import UUID
 
+from clickhouse_connect.driver.asyncclient import AsyncClient
+
 from .cache import RedisQueue
 from .clickhouse import ClickHouseBatcher
 from .clickhouse.client import make_client, make_insert_fn
+from .clickhouse.queries import existing_hand_ids, existing_tournament_ids
 from .config import get_settings
+from .db.imports import ImportCounts, finish_import
 from .ingest.storage import RawStorage
-from .parser import ParserUnavailable, build_hands, build_tournament, parse, parse_summary
+from .parser import ParserUnavailable, build_hands, build_tournament, parse, parse_summaries
 from .parser.wrapper import looks_like_summary
 
 logger = logging.getLogger("spin2note.worker")
 
 
-async def handle_raw(raw: str, user_id: UUID, batcher: ClickHouseBatcher) -> None:
-    """Parse one raw file and submit its rows. Shared by the worker and tests."""
+def _decode_object(object_key: str, data: bytes) -> str:
+    """Decode a staged object, decompressing gzip bundles (``.gz`` keys)."""
+    if object_key.endswith(".gz"):
+        data = gzip.decompress(data)
+    return data.decode("utf-8", errors="replace")
+
+
+async def handle_raw(
+    raw: str, user_id: UUID, batcher: ClickHouseBatcher, client: AsyncClient
+) -> ImportCounts:
+    """Parse one raw blob, skip duplicates, submit only new rows, return added/skipped counts.
+
+    Duplicates are detected by the deterministic id (hand_id / tournament_id) against both the
+    current batch and what already exists for the user — so re-uploading is a no-op that simply
+    reports how many were skipped.
+    """
     if looks_like_summary(raw):
-        summary = parse_summary(raw)
-        if summary is not None:
-            await batcher.submit("tournaments", build_tournament(summary, user_id))
-        return
-    for hand in build_hands(parse(raw), user_id):
+        tournaments = [build_tournament(s, user_id) for s in parse_summaries(raw)]
+        total = len(tournaments)
+        unique: dict[str, Any] = {}
+        for t in tournaments:
+            unique.setdefault(t.tournament_id, t)
+        existing = await existing_tournament_ids(client, user_id, unique.keys())
+        added = 0
+        for tid, t in unique.items():
+            if tid in existing:
+                continue
+            await batcher.submit("tournaments", t)
+            added += 1
+        return ImportCounts(
+            kind="summary", tournaments_added=added, tournaments_skipped=total - added
+        )
+
+    hands = build_hands(parse(raw), user_id)
+    total = len(hands)
+    unique_h: dict[UUID, Any] = {}
+    for h in hands:
+        unique_h.setdefault(h.hand_id, h)
+    existing_h = await existing_hand_ids(client, user_id, list(unique_h.keys()))
+    added = 0
+    for hid, hand in unique_h.items():
+        if hid in existing_h:
+            continue
         await batcher.submit("hands", hand)
         for player in hand.players:
             await batcher.submit("hand_players", player)
         for action in hand.actions:
             await batcher.submit("actions", action)
+        added += 1
+    return ImportCounts(kind="hands", hands_added=added, hands_skipped=total - added)
 
 
-async def _handle(job: dict[str, Any], storage: RawStorage, batcher: ClickHouseBatcher) -> None:
+async def _handle(
+    job: dict[str, Any], storage: RawStorage, batcher: ClickHouseBatcher, client: AsyncClient
+) -> None:
     settings = get_settings()
     user_id = UUID(job.get("user_id") or settings.default_user_id)
-    raw = storage.get(job["object_key"]).decode("utf-8", errors="replace")
+    key = job["object_key"]
+    import_id = UUID(job["import_id"]) if job.get("import_id") else None
     try:
-        await handle_raw(raw, user_id, batcher)
+        raw = _decode_object(key, storage.get(key))
+        counts = await handle_raw(raw, user_id, batcher, client)
+        await batcher.flush_all()  # durable in ClickHouse before dropping raw / reporting
     except ParserUnavailable:
-        logger.error("hh_parser not built; skipping job %s", job["object_key"])
+        logger.error("hh_parser not built; leaving %s for retry", key)
+        if import_id:
+            await finish_import(import_id, status="failed", error="parser unavailable")
+        return
+    except Exception as exc:  # noqa: BLE001 - keep the worker alive; leave raw for retry
+        logger.exception("failed to process %s; leaving raw for retry", key)
+        if import_id:
+            await finish_import(import_id, status="failed", error=str(exc)[:500])
+        return
+    storage.delete(key)  # transient staging — raw no longer needed once in ClickHouse
+    if import_id:
+        await finish_import(import_id, status="done", counts=counts)
 
 
 async def run() -> None:
@@ -66,7 +125,7 @@ async def run() -> None:
             job = await queue.dequeue(timeout=5)
             if job is None:
                 continue
-            await _handle(job, storage, batcher)
+            await _handle(job, storage, batcher, client)
     finally:
         await batcher.stop()
         await queue.close()

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
 from .config import get_settings
-from .http import hands, health, stats
+from .http import hands, health, imports, stats
 from .ingest import router as ingest_router
 
 
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(ingest_router.router)
     app.include_router(stats.router)
     app.include_router(hands.router)
+    app.include_router(imports.router)
     return app
 
 
