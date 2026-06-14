@@ -14,33 +14,40 @@ from clickhouse_connect.driver.asyncclient import AsyncClient
 
 _FORMAT_FILTER = " AND tournament_format = {fmt:String}"
 
+# Membership checks are batched: ClickHouse's HTTP layer rejects an over-long parameter value,
+# so a 16k-id IN list must be split into chunks small enough to fit the form field.
+_ID_BATCH = 1000
 
-async def existing_hand_ids(
-    client: AsyncClient, user_id: UUID, ids: list[UUID]
-) -> set[UUID]:
+
+def _batched(items: list[Any], size: int = _ID_BATCH) -> list[list[Any]]:
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+async def existing_hand_ids(client: AsyncClient, user_id: UUID, ids: list[UUID]) -> set[UUID]:
     """Return which of ``ids`` already exist for this user (for input deduplication)."""
-    if not ids:
-        return set()
-    res = await client.query(
-        "SELECT DISTINCT hand_id FROM hands "
-        "WHERE user_id = {u:UUID} AND hand_id IN {ids:Array(UUID)}",
-        parameters={"u": str(user_id), "ids": [str(i) for i in ids]},
-    )
-    return {row[0] if isinstance(row[0], UUID) else UUID(str(row[0])) for row in res.result_rows}
+    found: set[UUID] = set()
+    for batch in _batched(ids):
+        res = await client.query(
+            "SELECT DISTINCT hand_id FROM hands "
+            "WHERE user_id = {u:UUID} AND hand_id IN {ids:Array(UUID)}",
+            parameters={"u": str(user_id), "ids": [str(i) for i in batch]},
+        )
+        found |= {r[0] if isinstance(r[0], UUID) else UUID(str(r[0])) for r in res.result_rows}
+    return found
 
 
 async def existing_tournament_ids(
     client: AsyncClient, user_id: UUID, ids: Iterable[str]
 ) -> set[str]:
-    ids = list(ids)
-    if not ids:
-        return set()
-    res = await client.query(
-        "SELECT DISTINCT tournament_id FROM tournaments "
-        "WHERE user_id = {u:UUID} AND tournament_id IN {ids:Array(String)}",
-        parameters={"u": str(user_id), "ids": ids},
-    )
-    return {str(row[0]) for row in res.result_rows}
+    found: set[str] = set()
+    for batch in _batched(list(ids)):
+        res = await client.query(
+            "SELECT DISTINCT tournament_id FROM tournaments "
+            "WHERE user_id = {u:UUID} AND tournament_id IN {ids:Array(String)}",
+            parameters={"u": str(user_id), "ids": batch},
+        )
+        found |= {str(r[0]) for r in res.result_rows}
+    return found
 
 
 async def overview(client: AsyncClient, user_id: UUID, fmt: str | None) -> dict[str, Any]:
