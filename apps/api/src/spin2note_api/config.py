@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # ClickHouse (analytics store)
-    clickhouse_url: str = "http://localhost:8123"
+    clickhouse_url: str = "http://localhost:8123"  # HTTP, used for reads (clickhouse-connect)
+    clickhouse_native_port: int = 9000  # native TCP, used for fast inserts (asynch)
     clickhouse_user: str = "default"
     clickhouse_password: str = ""
     clickhouse_database: str = "spin2note"
@@ -46,8 +47,9 @@ class Settings(BaseSettings):
     # Fallback HS256 secret for local dev when JWKS is unavailable.
     supabase_jwt_secret: str = ""
 
-    # ClickHouse batching (hard rule: never single-row inserts)
-    batch_max_rows: int = 1000
+    # ClickHouse batching (hard rule: never single-row inserts; bigger blocks = far fewer
+    # native round-trips, which dominates bulk-insert throughput).
+    batch_max_rows: int = 50000
     batch_max_interval_seconds: float = 1.0
 
     # Fallback owner id for uploads without an authenticated user (local dev / bulk import).

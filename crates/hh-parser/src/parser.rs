@@ -2,7 +2,9 @@
 
 use std::collections::HashMap;
 
-use crate::model::{assign_positions, quantize_bb, villain_hash, Action, Hand, Player};
+use crate::model::{
+    assign_positions, deterministic_hand_id, quantize_bb, villain_hash, Action, Hand, Player,
+};
 
 /// Split a raw blob into individual hand blocks (each starts with `Poker Hand #`).
 pub fn split_hands(raw: &str) -> Vec<&str> {
@@ -244,7 +246,10 @@ pub fn parse_hand(block: &str) -> Option<Hand> {
     // Hero-centric effective stack: min(hero, max opponent), in BB*10.
     let effective_stack_bb = effective_stack(&players, big_blind);
 
+    let hand_id = deterministic_hand_id(&tournament_id, &source_hand_id);
+
     Some(Hand {
+        hand_id,
         source_hand_id,
         tournament_id,
         format,

@@ -23,6 +23,17 @@ def _batched(items: list[Any], size: int = _ID_BATCH) -> list[list[Any]]:
     return [items[i : i + size] for i in range(0, len(items), size)]
 
 
+async def user_has_rows(client: AsyncClient, table: str, user_id: UUID) -> bool:
+    """Cheap check used to skip membership queries entirely on a user's first import."""
+    if table not in {"hands", "tournaments"}:
+        raise ValueError(table)
+    res = await client.query(
+        f"SELECT 1 FROM {table} WHERE user_id = {{u:UUID}} LIMIT 1",
+        parameters={"u": str(user_id)},
+    )
+    return bool(res.result_rows)
+
+
 async def existing_hand_ids(client: AsyncClient, user_id: UUID, ids: list[UUID]) -> set[UUID]:
     """Return which of ``ids`` already exist for this user (for input deduplication)."""
     found: set[UUID] = set()

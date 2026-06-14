@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import gzip
 import logging
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -19,12 +20,19 @@ from clickhouse_connect.driver.asyncclient import AsyncClient
 
 from .cache import RedisQueue
 from .clickhouse import ClickHouseBatcher
-from .clickhouse.client import make_client, make_insert_fn
-from .clickhouse.queries import existing_hand_ids, existing_tournament_ids
+from .clickhouse.client import TABLE_COLUMNS, make_client
+from .clickhouse.native import make_native_conn, make_native_insert_fn
+from .clickhouse.queries import existing_hand_ids, existing_tournament_ids, user_has_rows
 from .config import get_settings
 from .db.imports import ImportCounts, finish_import
 from .ingest.storage import RawStorage
-from .parser import ParserUnavailable, build_hands, build_tournament, parse, parse_summaries
+from .parser import (
+    ParserUnavailable,
+    build_chunk_rows,
+    build_tournament_rows,
+    parse,
+    parse_summaries,
+)
 from .parser.wrapper import looks_like_summary
 
 logger = logging.getLogger("spin2note.worker")
@@ -46,40 +54,36 @@ async def handle_raw(
     current batch and what already exists for the user — so re-uploading is a no-op that simply
     reports how many were skipped.
     """
+    now = datetime.now(UTC).replace(tzinfo=None)
     if looks_like_summary(raw):
-        tournaments = [build_tournament(s, user_id) for s in parse_summaries(raw)]
-        total = len(tournaments)
-        unique: dict[str, Any] = {}
-        for t in tournaments:
-            unique.setdefault(t.tournament_id, t)
-        existing = await existing_tournament_ids(client, user_id, unique.keys())
-        added = 0
-        for tid, t in unique.items():
-            if tid in existing:
-                continue
-            await batcher.submit("tournaments", t)
-            added += 1
+        unique: dict[str, dict[str, Any]] = {}
+        for s in parse_summaries(raw):
+            unique.setdefault(s["tournament_id"], s)
+        total = len(unique)
+        existing: set[str] = set()
+        if await user_has_rows(client, "tournaments", user_id):
+            existing = await existing_tournament_ids(client, user_id, unique.keys())
+        new = [s for tid, s in unique.items() if tid not in existing]
+        await batcher.submit_block("tournaments", build_tournament_rows(new, user_id, now))
         return ImportCounts(
-            kind="summary", tournaments_added=added, tournaments_skipped=total - added
+            kind="summary", tournaments_added=len(new), tournaments_skipped=total - len(new)
         )
 
-    hands = build_hands(parse(raw), user_id)
-    total = len(hands)
-    unique_h: dict[UUID, Any] = {}
-    for h in hands:
-        unique_h.setdefault(h.hand_id, h)
-    existing_h = await existing_hand_ids(client, user_id, list(unique_h.keys()))
-    added = 0
-    for hid, hand in unique_h.items():
-        if hid in existing_h:
-            continue
-        await batcher.submit("hands", hand)
-        for player in hand.players:
-            await batcher.submit("hand_players", player)
-        for action in hand.actions:
-            await batcher.submit("actions", action)
-        added += 1
-    return ImportCounts(kind="hands", hands_added=added, hands_skipped=total - added)
+    unique_h: dict[UUID, dict[str, Any]] = {}
+    for h in parse(raw):
+        unique_h.setdefault(UUID(h["hand_id"]), h)
+    total = len(unique_h)
+    existing_h: set[UUID] = set()
+    if await user_has_rows(client, "hands", user_id):
+        existing_h = await existing_hand_ids(client, user_id, list(unique_h.keys()))
+    new_hands = [h for hid, h in unique_h.items() if hid not in existing_h]
+    blocks = build_chunk_rows(new_hands, user_id, now)
+    await batcher.submit_block("hands", blocks["hands"])
+    await batcher.submit_block("hand_players", blocks["hand_players"])
+    await batcher.submit_block("actions", blocks["actions"])
+    return ImportCounts(
+        kind="hands", hands_added=len(new_hands), hands_skipped=total - len(new_hands)
+    )
 
 
 async def _handle(
@@ -112,9 +116,10 @@ async def run() -> None:
     settings = get_settings()
     queue = RedisQueue(settings.redis_url)
     storage = RawStorage(settings)
-    client = await make_client(settings)
+    client = await make_client(settings)  # HTTP, reads (dedup)
+    native = await make_native_conn(settings)  # native TCP, fast inserts
     batcher = ClickHouseBatcher(
-        make_insert_fn(client),
+        make_native_insert_fn(native, TABLE_COLUMNS),
         max_rows=settings.batch_max_rows,
         max_interval_seconds=settings.batch_max_interval_seconds,
     )
@@ -129,6 +134,7 @@ async def run() -> None:
     finally:
         await batcher.stop()
         await queue.close()
+        await native.close()
 
 
 def main() -> None:

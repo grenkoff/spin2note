@@ -30,6 +30,11 @@ class CollectBatcher(ClickHouseBatcher):
     async def submit(self, table: str, row) -> None:  # type: ignore[override]
         self.rows.setdefault(table, []).append(row)
 
+    async def submit_block(self, table: str, rows) -> None:  # type: ignore[override]
+        if not rows:
+            return
+        self.rows.setdefault(table, []).extend(rows)
+
 
 class FakeCH:
     """Stub ClickHouse client returning a fixed set of already-existing ids."""
@@ -65,7 +70,7 @@ async def test_dedup_skips_existing_hands() -> None:
     # First import: nothing exists yet -> both hands added.
     first = CollectBatcher()
     await handle_raw(raw, USER, first, FakeCH())
-    seen_ids = {h.hand_id for h in first.rows["hands"]}
+    seen_ids = {row[0] for row in first.rows["hands"]}  # row[0] = hand_id (column order)
     assert len(seen_ids) == 2
 
     # Re-import: those hand_ids already exist -> all skipped, nothing submitted.

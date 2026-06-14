@@ -90,30 +90,34 @@ export async function bulkUpload(
   let sm: string[] = [];
   let smSize = 0;
 
-  for (const file of files) {
-    const text = await file.text();
-    p.filesRead += 1;
-    const kind = classify(text);
-    if (kind === "hh") {
-      hh.push(text);
-      hhSize += text.length;
-      if (hhSize >= CHUNK_BYTES) {
-        await ship(hh.join("\n"));
-        hh = [];
-        hhSize = 0;
+  // Read files with bounded concurrency (disk I/O parallelism) while bundling sequentially.
+  const READ_CONCURRENCY = 16;
+  for (let i = 0; i < files.length; i += READ_CONCURRENCY) {
+    const texts = await Promise.all(files.slice(i, i + READ_CONCURRENCY).map((f) => f.text()));
+    for (const text of texts) {
+      p.filesRead += 1;
+      const kind = classify(text);
+      if (kind === "hh") {
+        hh.push(text);
+        hhSize += text.length;
+        if (hhSize >= CHUNK_BYTES) {
+          await ship(hh.join("\n"));
+          hh = [];
+          hhSize = 0;
+        }
+      } else if (kind === "summary") {
+        sm.push(text);
+        smSize += text.length;
+        if (smSize >= CHUNK_BYTES) {
+          await ship(sm.join("\n"));
+          sm = [];
+          smSize = 0;
+        }
+      } else {
+        p.filesSkipped += 1;
       }
-    } else if (kind === "summary") {
-      sm.push(text);
-      smSize += text.length;
-      if (smSize >= CHUNK_BYTES) {
-        await ship(sm.join("\n"));
-        sm = [];
-        smSize = 0;
-      }
-    } else {
-      p.filesSkipped += 1;
     }
-    if (p.filesRead % 250 === 0) onProgress({ ...p });
+    onProgress({ ...p });
   }
 
   if (hh.length) await ship(hh.join("\n"));

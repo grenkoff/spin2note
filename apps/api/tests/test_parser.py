@@ -74,6 +74,15 @@ def test_six_max_positions() -> None:
     assert positions == {"BTN", "SB", "BB", "UTG", "HJ", "CO"}
 
 
+def test_rust_hand_id_matches_python() -> None:
+    # The Rust parser computes hand_id (uuid5); it must equal the Python derivation, or dedup
+    # would key differently between the two.
+    for raw in (_read("3max/sample.txt"), _read("6max/sample.txt")):
+        for h in parse(raw):
+            expected = deterministic_hand_id(h["tournament_id"], h["source_hand_id"])
+            assert UUID(h["hand_id"]) == expected
+
+
 def test_deterministic_hand_id_is_stable() -> None:
     a = deterministic_hand_id("900000001", "SG3000000001")
     b = deterministic_hand_id("900000001", "SG3000000001")

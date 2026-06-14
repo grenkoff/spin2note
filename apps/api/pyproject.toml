@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.6",
     "clickhouse-connect>=0.8",
     "aiohttp>=3.10",
+    "asynch>=0.2.5",
     "redis>=5.2",
     "minio>=7.2",
     "sqlalchemy>=2.0",
