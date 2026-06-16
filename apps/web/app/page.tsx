@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { ResultByStack } from "@/components/charts/result-by-stack";
+import { CumulativeResult } from "@/components/charts/cumulative-result";
 import { AppShell } from "@/components/app-shell";
 import { Uploader } from "@/components/uploader";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getOverview, getRecentHands, type Overview, type RecentHand } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { formatChips } from "@/lib/utils";
+import { formatChips, formatUsd } from "@/lib/utils";
 
 type Format = "3max" | "6max" | undefined;
 
@@ -95,6 +96,35 @@ function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Net result over time (chips)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {overview && overview.chips_timeline.length > 0 ? (
+              <CumulativeResult data={overview.chips_timeline} format={formatChips} />
+            ) : (
+              <p className="py-12 text-center text-sm text-muted-foreground">No hands yet — upload a hand history.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Net result over time ($)</CardTitle>
+            <p className="text-xs text-muted-foreground">Real-money P&amp;L across all formats.</p>
+          </CardHeader>
+          <CardContent>
+            {overview && overview.dollars_timeline.length > 0 ? (
+              <CumulativeResult data={overview.dollars_timeline} format={formatUsd} />
+            ) : (
+              <p className="py-12 text-center text-sm text-muted-foreground">No tournament summaries yet — upload one.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>

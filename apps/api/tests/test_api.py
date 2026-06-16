@@ -31,6 +31,8 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
             "total_tournaments": 2,
             "avg_multiplier": 2.5,
             "by_stack": [{"effective_stack_bb": 15, "hands": 10, "result": 120.0, "winrate": 0.6}],
+            "chips_timeline": [{"idx": 1, "at": "2026-01-07T22:54:43", "cumulative": 120.0}],
+            "dollars_timeline": [{"idx": 1, "at": "2026-01-07T22:54:43", "cumulative": -0.25}],
         }
 
     async def fake_recent(_c: Any, _u: Any, _l: int) -> list[dict[str, Any]]:

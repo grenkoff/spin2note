@@ -23,6 +23,31 @@ def _batched(items: list[Any], size: int = _ID_BATCH) -> list[list[Any]]:
     return [items[i : i + size] for i in range(0, len(items), size)]
 
 
+def _iso(value: Any) -> str:
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+def _cumulative_timeline(rows: list[Any], max_points: int = 1500) -> list[dict[str, Any]]:
+    """Turn time-ordered ``(delta, at)`` rows into a downsampled cumulative series.
+
+    Each point is ``{"idx", "at", "cumulative"}``. The running total is computed over *all* rows
+    (so the curve is exact), then thinned to at most ``max_points`` evenly-spaced points with the
+    last point always kept — bounds the payload when a hero has 100k+ hands.
+    """
+    total = 0.0
+    points: list[dict[str, Any]] = []
+    for i, r in enumerate(rows, start=1):
+        total += float(r[0])
+        points.append({"idx": i, "at": _iso(r[1]), "cumulative": round(total, 2)})
+    if len(points) <= max_points:
+        return points
+    step = len(points) / max_points
+    sampled = [points[int(k * step)] for k in range(max_points)]
+    if sampled[-1] is not points[-1]:
+        sampled[-1] = points[-1]
+    return sampled
+
+
 async def user_has_rows(client: AsyncClient, table: str, user_id: UUID) -> bool:
     """Cheap check used to skip membership queries entirely on a user's first import."""
     if table not in {"hands", "tournaments"}:
@@ -104,11 +129,39 @@ async def overview(client: AsyncClient, user_id: UUID, fmt: str | None) -> dict[
         for r in by_stack.result_rows
     ]
 
+    # Cumulative chips P&L over hero hands (time-ordered). Respects the format filter.
+    chips_series = await client.query(
+        f"""
+        SELECT hp.result AS result, h.played_at AS at
+        FROM hand_players AS hp
+        INNER JOIN hands AS h ON hp.hand_id = h.hand_id
+        WHERE hp.user_id = {{u:UUID}} AND hp.is_hero = 1{f_hands}
+        ORDER BY h.played_at
+        """,
+        parameters=params,
+    )
+    chips_timeline = _cumulative_timeline(chips_series.result_rows)
+
+    # Cumulative real-money P&L per tournament (net = hero_prize - buy_in), time-ordered.
+    # The tournaments table has no tournament_format column, so this series spans all formats.
+    dollars_series = await client.query(
+        """
+        SELECT (hero_prize - buy_in) AS net, started_at AS at
+        FROM tournaments
+        WHERE user_id = {u:UUID}
+        ORDER BY started_at
+        """,
+        parameters={"u": str(user_id)},
+    )
+    dollars_timeline = _cumulative_timeline(dollars_series.result_rows)
+
     return {
         "total_hands": total_hands,
         "total_tournaments": total_tournaments,
         "avg_multiplier": avg_multiplier,
         "by_stack": stacks,
+        "chips_timeline": chips_timeline,
+        "dollars_timeline": dollars_timeline,
     }
 
 
