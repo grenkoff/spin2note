@@ -1,6 +1,6 @@
 ---
 description: Stop the full local dev stack (frontend + API + docker infra) brought up by /server-up
-allowed-tools: Bash(docker*), Bash(pkill*), Bash(curl*), Bash(cd*)
+allowed-tools: Bash(docker*), Bash(pgrep*), Bash(kill*), Bash(xargs*), Bash(curl*), Bash(cd*)
 ---
 
 Tear down everything `/server-up` started, in reverse order: local processes first, then Docker.
@@ -10,21 +10,24 @@ stop only that one; otherwise stop all.
 Data is preserved: we `docker compose stop` (not `down`), so containers and named volumes survive
 and `/server-up` restarts fast with the same DB contents.
 
+**Run each kill below as its OWN Bash call — do NOT chain them on one line.** A combined
+`pkill … ; pkill …` line has repeatedly aborted after the first command (exit 144) and left the
+API alive. Killing by PID via `pgrep | xargs` is deterministic and won't signal the wrong process.
+
 ## 1. Frontend (Next.js, port 3000)
 ```bash
-pkill -f "next dev" || true
+pgrep -f "next dev" | xargs -r kill 2>/dev/null; true
 ```
 (`npm run dev` spawns `next dev` / `next-server`; the pattern catches the tree.)
 
-## 2. API (uvicorn, port 8000)
+## 2. API (uvicorn, port 8000) — separate Bash call
 ```bash
-pkill -f "spin2note_api.main:app" || true
+pgrep -f "spin2note_api.main:app" | xargs -r kill 2>/dev/null; true
 ```
-Match on `spin2note_api.main:app` (NOT `uvicorn …`): the server runs as `uv run uvicorn …`, so
-the `uvicorn` token only appears on the inner process — the `uv run` wrapper and the reloader's
-child would survive and keep port 8000 open. The bare module pattern catches the whole tree.
-If anything still answers on :8000 afterwards, fall back to killing by PID
-(`pgrep -af "spin2note_api.main:app"` then `kill <pids>`).
+Match on `spin2note_api.main:app` (NOT `uvicorn …`): the server runs as `uv run uvicorn …`, so the
+`uvicorn` token only appears on the inner process — the `uv run` wrapper and the reloader's child
+would survive and keep port 8000 open. The bare module pattern catches the whole tree. If `:8000`
+still answers in step 4, re-run this line (or `kill -9` the leftover PIDs from `pgrep -af`).
 
 ## 3. Backing infra (Docker)
 ```bash
