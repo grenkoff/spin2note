@@ -112,6 +112,7 @@ async def overview(client: AsyncClient, user_id: UUID, fmt: str | None) -> dict[
             toUInt16(round(effective_stack_bb / 10)) AS bb,
             count() AS hands,
             sum(result) AS total_result,
+            sum(chip_ev) AS total_ev,
             countIf(result > 0) / count() AS winrate
         FROM hand_players
         WHERE user_id = {{u:UUID}} AND is_hero = 1{f_hands}
@@ -124,9 +125,36 @@ async def overview(client: AsyncClient, user_id: UUID, fmt: str | None) -> dict[
             "effective_stack_bb": int(r[0]),
             "hands": int(r[1]),
             "result": round(float(r[2]), 2),
-            "winrate": round(float(r[3]), 4),
+            "result_ev": round(float(r[3]), 2),
+            "winrate": round(float(r[4]), 4),
         }
         for r in by_stack.result_rows
+    ]
+
+    # Same aggregation grouped by hero position (UTG/HJ/CO/BTN/SB/BB); ordered client-side.
+    by_position = await client.query(
+        f"""
+        SELECT
+            position,
+            count() AS hands,
+            sum(result) AS total_result,
+            sum(chip_ev) AS total_ev,
+            countIf(result > 0) / count() AS winrate
+        FROM hand_players
+        WHERE user_id = {{u:UUID}} AND is_hero = 1{f_hands}
+        GROUP BY position
+        """,
+        parameters=params,
+    )
+    positions = [
+        {
+            "position": str(r[0]),
+            "hands": int(r[1]),
+            "result": round(float(r[2]), 2),
+            "result_ev": round(float(r[3]), 2),
+            "winrate": round(float(r[4]), 4),
+        }
+        for r in by_position.result_rows
     ]
 
     # Cumulative chips P&L over hero hands (time-ordered). Respects the format filter.
@@ -160,6 +188,7 @@ async def overview(client: AsyncClient, user_id: UUID, fmt: str | None) -> dict[
         "total_tournaments": total_tournaments,
         "avg_multiplier": avg_multiplier,
         "by_stack": stacks,
+        "by_position": positions,
         "chips_timeline": chips_timeline,
         "dollars_timeline": dollars_timeline,
     }

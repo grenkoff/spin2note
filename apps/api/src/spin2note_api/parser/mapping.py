@@ -53,6 +53,7 @@ def build_hand(parsed: dict[str, Any], user_id: UUID) -> Hand:
             hole_cards=p["hole_cards"],
             won=p["won"],
             result=p["result"],
+            chip_ev=p["chip_ev"],
         )
         for p in parsed["players"]
     ]
@@ -123,7 +124,7 @@ def build_chunk_rows(
             player_rows.append((
                 hid, user_id, fmt, eff, p["seat"], int(p["is_hero"]), p["villain_hash"],
                 p["position"], p["starting_stack"], p["hole_cards"], p["won"], p["result"],
-                parsed_at,
+                p["chip_ev"], parsed_at,
             ))
         for a in h["actions"]:
             action_rows.append((

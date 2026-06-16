@@ -24,6 +24,7 @@ pub struct Player {
     pub won: f64,
     pub invested: f64,
     pub result: f64,
+    pub chip_ev: f64, // all-in-adjusted result; == result unless a 2-way all-in reached showdown
 }
 
 #[derive(Debug, Clone)]

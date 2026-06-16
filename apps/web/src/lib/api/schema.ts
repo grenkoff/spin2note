@@ -197,10 +197,25 @@ export interface components {
             avg_multiplier: number;
             /** By Stack */
             by_stack: components["schemas"]["StackBucket"][];
+            /** By Position */
+            by_position: components["schemas"]["PositionBucket"][];
             /** Chips Timeline */
             chips_timeline: components["schemas"]["TimelinePoint"][];
             /** Dollars Timeline */
             dollars_timeline: components["schemas"]["TimelinePoint"][];
+        };
+        /** PositionBucket */
+        PositionBucket: {
+            /** Position */
+            position: string;
+            /** Hands */
+            hands: number;
+            /** Result */
+            result: number;
+            /** Result Ev */
+            result_ev: number;
+            /** Winrate */
+            winrate: number;
         };
         /** RecentHand */
         RecentHand: {
@@ -227,6 +242,8 @@ export interface components {
             hands: number;
             /** Result */
             result: number;
+            /** Result Ev */
+            result_ev: number;
             /** Winrate */
             winrate: number;
         };

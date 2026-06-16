@@ -19,7 +19,16 @@ router = APIRouter(prefix="/stats", tags=["analytics"])
 class StackBucket(BaseModel):
     effective_stack_bb: int
     hands: int
-    result: float
+    result: float     # total chips
+    result_ev: float  # total chipEV (all-in adjusted)
+    winrate: float
+
+
+class PositionBucket(BaseModel):
+    position: str
+    hands: int
+    result: float     # total chips
+    result_ev: float  # total chipEV (all-in adjusted)
     winrate: float
 
 
@@ -34,6 +43,7 @@ class Overview(BaseModel):
     total_tournaments: int
     avg_multiplier: float
     by_stack: list[StackBucket]
+    by_position: list[PositionBucket]
     chips_timeline: list[TimelinePoint]
     dollars_timeline: list[TimelinePoint]
 
