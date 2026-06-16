@@ -117,6 +117,7 @@ pub fn parse_hand(block: &str) -> Option<Hand> {
                         won: 0.0,
                         invested: 0.0,
                         result: 0.0,
+                        chip_ev: 0.0,
                     });
                 }
                 continue;
@@ -248,6 +249,10 @@ pub fn parse_hand(block: &str) -> Option<Hand> {
 
     let hand_id = deterministic_hand_id(&tournament_id, &source_hand_id);
 
+    // All-in-adjusted result (chipEV): replace the runout gamble with equity * pot for the
+    // qualifying 2-player all-in showdown; everything else keeps the actual result.
+    assign_chip_ev(&mut players, &actions, &board, pot, villain_hash(&hand_id));
+
     Some(Hand {
         hand_id,
         source_hand_id,
@@ -266,6 +271,58 @@ pub fn parse_hand(block: &str) -> Option<Hand> {
         players,
         actions,
     })
+}
+
+/// Set `chip_ev` for every player. Default is the actual `result`; only when exactly two players
+/// reach showdown all-in with both hole cards known do we replace it with `equity * pot - invested`
+/// (variance removed). Multiway all-ins (side pots) are out of scope for v1 and keep the actual result.
+fn assign_chip_ev(players: &mut [Player], actions: &[Action], board: &str, pot: f64, seed: u64) {
+    use std::collections::HashSet;
+    for p in players.iter_mut() {
+        p.chip_ev = p.result;
+    }
+    let folded: HashSet<u8> = actions.iter().filter(|a| a.kind == "fold").map(|a| a.seat).collect();
+    let all_in: HashSet<u8> = actions.iter().filter(|a| a.all_in).map(|a| a.seat).collect();
+
+    let live: Vec<usize> = (0..players.len())
+        .filter(|&i| !folded.contains(&players[i].seat))
+        .collect();
+    // Exactly two live players, both all-in, both with known cards.
+    if live.len() != 2 || !live.iter().all(|&i| all_in.contains(&players[i].seat)) {
+        return;
+    }
+    let mut holes = Vec::with_capacity(2);
+    for &i in &live {
+        match crate::equity::parse_cards(&players[i].hole_cards) {
+            Some(c) if c.len() == 2 => holes.push(c),
+            _ => return,
+        }
+    }
+    // Board known at the moment the last chips went in (the latest all-in street).
+    let street_rank = |s: &str| match s {
+        "flop" => 1,
+        "turn" => 2,
+        "river" => 3,
+        _ => 0,
+    };
+    let lock = actions.iter().filter(|a| a.all_in).map(|a| street_rank(a.street)).max().unwrap_or(0);
+    let need_board = match lock {
+        0 => 0,
+        1 => 3,
+        2 => 4,
+        _ => 5,
+    };
+    let board_cards = match crate::equity::parse_cards(board) {
+        Some(c) => c,
+        None => return,
+    };
+    if board_cards.len() < need_board {
+        return;
+    }
+    let eq = crate::equity::equity(&holes, &board_cards[..need_board], seed);
+    for (k, &i) in live.iter().enumerate() {
+        players[i].chip_ev = eq[k] * pot - players[i].invested;
+    }
 }
 
 fn effective_stack(players: &[Player], big_blind: f64) -> u16 {
@@ -451,6 +508,30 @@ Seat 3: f55138e4 (big blind) showed [3h 4h] and won (600) with three of a kind, 
         // Net result across players sums to ~0 (rake 0).
         let net: f64 = h.players.iter().map(|p| p.result).sum();
         assert!(net.abs() < 1e-6);
+    }
+
+    #[test]
+    fn chip_ev_adjusts_allin_showdown() {
+        let h = parse_hand(ALLIN_SHOWDOWN).expect("hand");
+        let hero = h.players.iter().find(|p| p.is_hero).unwrap();
+        let winner = h.players.iter().find(|p| p.name == "f55138e4").unwrap();
+
+        // Hero lost the actual pot (-300) but had real equity, so chipEV pulls it up; the lucky
+        // winner's chipEV is pulled below their +300. Both stay within the pot bounds.
+        assert!(hero.chip_ev > hero.result && hero.chip_ev < 300.0);
+        assert!(winner.chip_ev < winner.result && winner.chip_ev > -300.0);
+        // chipEV is zero-sum across the table (rake 0), like result.
+        let net_ev: f64 = h.players.iter().map(|p| p.chip_ev).sum();
+        assert!(net_ev.abs() < 1e-6, "chipEV net {net_ev} not ~0");
+    }
+
+    #[test]
+    fn chip_ev_equals_result_without_allin_showdown() {
+        // No all-in / villain folds: nothing to adjust, chipEV mirrors result exactly.
+        let h = parse_hand(MULTI_STREET).expect("hand");
+        for p in &h.players {
+            assert_eq!(p.chip_ev, p.result);
+        }
     }
 
     const MULTI_STREET: &str = "\

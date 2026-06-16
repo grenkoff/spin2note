@@ -8,6 +8,7 @@
 //! Pure parsing lives in plain functions returning Rust structs (unit-tested without Python);
 //! the `#[pyfunction]`s are thin converters to Python dicts.
 
+mod equity;
 mod model;
 mod parser;
 mod summary;
@@ -102,6 +103,7 @@ fn player_to_py<'py>(py: Python<'py>, p: &Player) -> PyResult<Bound<'py, PyDict>
     d.set_item("won", p.won)?;
     d.set_item("invested", p.invested)?;
     d.set_item("result", p.result)?;
+    d.set_item("chip_ev", p.chip_ev)?;
     Ok(d)
 }
 

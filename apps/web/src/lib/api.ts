@@ -3,6 +3,7 @@ import type { components } from "./api/schema";
 // Types come straight from the backend OpenAPI spec (regenerate via `npm run generate-client`).
 export type Overview = components["schemas"]["Overview"];
 export type StackBucket = components["schemas"]["StackBucket"];
+export type PositionBucket = components["schemas"]["PositionBucket"];
 export type TimelinePoint = components["schemas"]["TimelinePoint"];
 export type RecentHand = components["schemas"]["RecentHand"];
 export type UploadResult = components["schemas"]["UploadResult"];

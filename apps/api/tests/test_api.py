@@ -30,7 +30,14 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
             "total_hands": 10,
             "total_tournaments": 2,
             "avg_multiplier": 2.5,
-            "by_stack": [{"effective_stack_bb": 15, "hands": 10, "result": 120.0, "winrate": 0.6}],
+            "by_stack": [
+                {"effective_stack_bb": 15, "hands": 10, "result": 120.0,
+                 "result_ev": 90.0, "winrate": 0.6}
+            ],
+            "by_position": [
+                {"position": "BTN", "hands": 6, "result": 80.0,
+                 "result_ev": 70.0, "winrate": 0.5}
+            ],
             "chips_timeline": [{"idx": 1, "at": "2026-01-07T22:54:43", "cumulative": 120.0}],
             "dollars_timeline": [{"idx": 1, "at": "2026-01-07T22:54:43", "cumulative": -0.25}],
         }
@@ -59,6 +66,9 @@ def test_overview_requires_shape(client: TestClient) -> None:
     body = r.json()
     assert body["total_hands"] == 10
     assert body["by_stack"][0]["winrate"] == 0.6
+    assert body["by_stack"][0]["result_ev"] == 90.0
+    assert body["by_position"][0]["position"] == "BTN"
+    assert body["by_position"][0]["result_ev"] == 70.0
 
 
 def test_overview_rejects_bad_format(client: TestClient) -> None:

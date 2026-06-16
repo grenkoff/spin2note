@@ -18,3 +18,9 @@ export function formatUsd(value: number): string {
   });
   return `${sign}$${abs}`;
 }
+
+/** Chips per 100 hands, rounded — the comparable winrate metric for the per-spot bars. */
+export function formatPer100(value: number): string {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${Math.round(value).toLocaleString("en-US")}`;
+}

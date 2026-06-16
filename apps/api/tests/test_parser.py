@@ -132,3 +132,26 @@ def test_build_tournament_rows_matches_table_columns() -> None:
     # Tuple arity is the contract with TABLE_COLUMNS; hero_prize sits before parsed_at.
     assert len(rows[0]) == len(TABLE_COLUMNS["tournaments"])
     assert rows[0][TABLE_COLUMNS["tournaments"].index("hero_prize")] == 0.0
+
+
+def test_chip_ev_present_and_adjusts_allin_showdown() -> None:
+    # The 3-max sample is a preflop all-in that reaches showdown; chipEV must differ from the
+    # actual result for the hero (who lost the pot but had equity), and stay within the pot.
+    h = build_hands(parse(_read("3max/sample.txt")), USER)[0]
+    hero = next(p for p in h.players if p.is_hero)
+    assert hero.result == -300.0
+    assert hero.chip_ev > hero.result
+    assert hero.chip_ev < 300.0
+
+
+def test_build_chunk_rows_player_arity_matches_table_columns() -> None:
+    from datetime import datetime
+
+    from spin2note_api.clickhouse.client import TABLE_COLUMNS
+    from spin2note_api.parser import build_chunk_rows
+
+    rows = build_chunk_rows(parse(_read("3max/sample.txt")), USER, datetime(2026, 1, 1))
+    cols = TABLE_COLUMNS["hand_players"]
+    assert len(rows["hand_players"][0]) == len(cols)
+    # chip_ev column carries a float (the all-in-adjusted result).
+    assert isinstance(rows["hand_players"][0][cols.index("chip_ev")], float)

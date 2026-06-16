@@ -24,7 +24,8 @@ TABLE_COLUMNS: dict[str, list[str]] = {
     ],
     "hand_players": [
         "hand_id", "user_id", "tournament_format", "effective_stack_bb", "seat", "is_hero",
-        "villain_hash", "position", "starting_stack", "hole_cards", "won", "result", "parsed_at",
+        "villain_hash", "position", "starting_stack", "hole_cards", "won", "result", "chip_ev",
+        "parsed_at",
     ],
     "actions": [
         "hand_id", "user_id", "tournament_format", "effective_stack_bb", "street", "seat",

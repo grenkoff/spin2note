@@ -47,6 +47,7 @@ class HandPlayer(BaseModel):
     hole_cards: str = ""
     won: float = 0.0
     result: float = 0.0
+    chip_ev: float = 0.0  # all-in-adjusted result; == result unless a 2-way all-in reached showdown
     parsed_at: datetime = Field(default_factory=_now)
 
 
