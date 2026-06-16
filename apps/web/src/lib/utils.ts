@@ -9,3 +9,12 @@ export function formatChips(value: number): string {
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toLocaleString("en-US")}`;
 }
+
+export function formatUsd(value: number): string {
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  const abs = Math.abs(value).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${sign}$${abs}`;
+}

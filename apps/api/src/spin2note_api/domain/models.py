@@ -83,4 +83,6 @@ class Tournament(BaseModel):
     multiplier: int = 0
     started_at: datetime | None = None
     hero_place: int = 0
+    # hero's actual cash won (from summary finishes); net $ = hero_prize - buy_in
+    hero_prize: float = 0.0
     parsed_at: datetime = Field(default_factory=_now)

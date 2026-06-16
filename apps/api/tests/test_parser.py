@@ -101,3 +101,34 @@ def test_summary_mapping() -> None:
     assert t.multiplier == 3
     assert t.players == 3
     assert t.hero_place == 3
+    assert t.hero_prize == 0.0  # finished 3rd, "$0"
+
+
+def test_hero_prize_from_winning_summary() -> None:
+    # 6-max, Hero 1st for $4 on a $1 buy-in — prize pool is $6, so NOT winner-take-all:
+    # the real parsed prize is required for correct $ P&L.
+    raw = (
+        "Tournament #283232820, Spin&Gold #11, Hold'em No Limit\n"
+        "Buy-in: $1\n6 Players\nTotal Prize Pool: $6\n"
+        "Tournament started 2026/05/07 03:14:26\n"
+        "1st : Hero, $4\nYou finished in 1st place.\n"
+    )
+    summary = parse_summary(raw)
+    assert summary is not None
+    t = build_tournament(summary, USER)
+    assert t.buy_in == 1.0
+    assert t.hero_prize == 4.0  # net $ = 4 - 1 = +3
+
+
+def test_build_tournament_rows_matches_table_columns() -> None:
+    from datetime import datetime
+
+    from spin2note_api.clickhouse.client import TABLE_COLUMNS
+    from spin2note_api.parser import build_tournament_rows
+
+    summary = parse_summary(_read("summary/sample.txt"))
+    assert summary is not None
+    rows = build_tournament_rows([summary], USER, datetime(2026, 1, 1))
+    # Tuple arity is the contract with TABLE_COLUMNS; hero_prize sits before parsed_at.
+    assert len(rows[0]) == len(TABLE_COLUMNS["tournaments"])
+    assert rows[0][TABLE_COLUMNS["tournaments"].index("hero_prize")] == 0.0

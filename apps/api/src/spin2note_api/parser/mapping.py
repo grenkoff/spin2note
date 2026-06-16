@@ -133,13 +133,19 @@ def build_chunk_rows(
     return {"hands": hand_rows, "hand_players": player_rows, "actions": action_rows}
 
 
+def _hero_prize(summary: dict[str, Any]) -> float:
+    """Hero's actual cash won, summed from the summary finish lines ("Nrd : Hero, $X")."""
+    return float(sum(f["prize"] for f in summary.get("finishes", []) if f["name"] == "Hero"))
+
+
 def build_tournament_rows(
     summaries: list[dict[str, Any]], user_id: UUID, parsed_at: datetime
 ) -> list[tuple[Any, ...]]:
     return [
         (
             s["tournament_id"], user_id, s["name"], s["buy_in"], s["currency"], s["players"],
-            s["prize_pool"], s["multiplier"], _dt(s["started_at"]), s["hero_place"], parsed_at,
+            s["prize_pool"], s["multiplier"], _dt(s["started_at"]), s["hero_place"],
+            _hero_prize(s), parsed_at,
         )
         for s in summaries
     ]
@@ -157,4 +163,5 @@ def build_tournament(summary: dict[str, Any], user_id: UUID) -> Tournament:
         multiplier=summary["multiplier"],
         started_at=_dt(summary["started_at"]),
         hero_place=summary["hero_place"],
+        hero_prize=_hero_prize(summary),
     )

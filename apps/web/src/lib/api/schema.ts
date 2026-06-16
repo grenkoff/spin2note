@@ -197,6 +197,10 @@ export interface components {
             avg_multiplier: number;
             /** By Stack */
             by_stack: components["schemas"]["StackBucket"][];
+            /** Chips Timeline */
+            chips_timeline: components["schemas"]["TimelinePoint"][];
+            /** Dollars Timeline */
+            dollars_timeline: components["schemas"]["TimelinePoint"][];
         };
         /** RecentHand */
         RecentHand: {
@@ -225,6 +229,15 @@ export interface components {
             result: number;
             /** Winrate */
             winrate: number;
+        };
+        /** TimelinePoint */
+        TimelinePoint: {
+            /** Idx */
+            idx: number;
+            /** At */
+            at: string;
+            /** Cumulative */
+            cumulative: number;
         };
         /** UploadResult */
         UploadResult: {

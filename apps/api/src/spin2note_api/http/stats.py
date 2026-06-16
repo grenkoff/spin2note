@@ -23,11 +23,19 @@ class StackBucket(BaseModel):
     winrate: float
 
 
+class TimelinePoint(BaseModel):
+    idx: int          # sequential hand# (chips) or tournament# (dollars)
+    at: str           # ISO timestamp
+    cumulative: float  # running total
+
+
 class Overview(BaseModel):
     total_hands: int
     total_tournaments: int
     avg_multiplier: float
     by_stack: list[StackBucket]
+    chips_timeline: list[TimelinePoint]
+    dollars_timeline: list[TimelinePoint]
 
 
 def _user_id(claims: dict[str, Any]) -> UUID:

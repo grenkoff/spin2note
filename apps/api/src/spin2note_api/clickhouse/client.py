@@ -32,7 +32,7 @@ TABLE_COLUMNS: dict[str, list[str]] = {
     ],
     "tournaments": [
         "tournament_id", "user_id", "name", "buy_in", "currency", "players", "prize_pool",
-        "multiplier", "started_at", "hero_place", "parsed_at",
+        "multiplier", "started_at", "hero_place", "hero_prize", "parsed_at",
     ],
 }
 
